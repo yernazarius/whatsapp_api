@@ -1,4 +1,5 @@
 from fastapi import FastAPI, Request, HTTPException, status
+from fastapi.responses import PlainTextResponse
 from fastapi.responses import JSONResponse
 import os
 import httpx
@@ -49,16 +50,15 @@ async def receive_message(request: Request):
         raise HTTPException(status_code=404, detail="Event is not from WhatsApp API")
 
 @app.get("/webhook")
-async def verify_webhook(request: Request):
+async def verify_webhook(mode: str, verify_token: str, challenge: str):
     # Verify the webhook
-    mode = request.query_params.get("hub.mode")
-    token = request.query_params.get("hub.verify_token")
-    challenge = request.query_params.get("hub.challenge")
-
-    if mode and token:
-        if mode == "subscribe" and token == VERIFY_TOKEN:
-            return JSONResponse(content=int(challenge))  # Return challenge as a plain text response
+    if mode and verify_token:
+        if mode == "subscribe" and verify_token == VERIFY_TOKEN:
+            # Respond with the challenge token from the request
+            return PlainTextResponse(content=challenge)
         else:
-            raise HTTPException(status_code=403, detail="Verification failed")
+            # Responds with '403 Forbidden' if verify tokens do not match
+            return PlainTextResponse(content="Verification failed", status_code=403)
     else:
-        raise HTTPException(status_code=400, detail="Missing mode or token")
+        # Responds with '400 Bad Request' if required parameters are missing
+        return PlainTextResponse(content="Missing mode or verify_token", status_code=400)
