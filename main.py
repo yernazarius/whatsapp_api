@@ -48,16 +48,12 @@ async def receive_message(request: Request):
     else:
         raise HTTPException(status_code=404, detail="Event is not from a WhatsApp API")
 
-
 @app.get("/webhook")
-async def verify_webhook(response: Response, hub_mode: str = None, hub_verify_token: str = None, hub_challenge: str = None):
-    if hub_mode and hub_verify_token:
-        if hub_mode == 'subscribe' and hub_verify_token == VERIFY_TOKEN:
-            return Response(content=hub_challenge, media_type="text/plain", status_code=200)
-        else:
-            raise HTTPException(status_code=403, detail="Verification failed")
+async def verify_webhook(hub_mode: str, hub_verify_token: str, hub_challenge: str):
+    if hub_mode == 'subscribe' and hub_verify_token == VERIFY_TOKEN:
+        return Response(content=hub_challenge, media_type="text/plain")
     else:
-        raise HTTPException(status_code=400, detail="Missing mode or token")
+        return Response(status_code=403, content="Verification failed")
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=int(os.getenv('PORT', 8000)))
