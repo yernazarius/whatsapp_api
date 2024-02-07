@@ -1,17 +1,14 @@
-from fastapi import FastAPI, Request, HTTPException, status
-from pydantic import BaseModel
+from fastapi import FastAPI, Request, HTTPException, status, Response
+from fastapi.responses import PlainTextResponse
 import os
 import httpx
 
 app = FastAPI()
 
-# Your WhatsApp token and verify token from environment variables
+# Your WhatsApp token from environment variables
 WHATSAPP_TOKEN = os.getenv("WHATSAPP_TOKEN")
 VERIFY_TOKEN = os.getenv("VERIFY_TOKEN")
 
-class WhatsAppMessage(BaseModel):
-    object: str
-    entry: list
 
 @app.post("/webhook")
 async def receive_message(request: Request):
@@ -49,11 +46,13 @@ async def receive_message(request: Request):
         raise HTTPException(status_code=404, detail="Event is not from WhatsApp API")
 
 @app.get("/webhook")
-async def verify_webhook(mode: str, token: str, challenge: str):
+async def verify_webhook(response: Response, hub_mode: str = None, hub_verify_token: str = None, hub_challenge: str = None):
+
     # Verify the webhook
-    if mode and token:
-        if mode == "subscribe" and token == VERIFY_TOKEN:
-            return {"challenge": challenge}
+    if hub_mode and hub_verify_token:
+        if hub_mode == "subscribe" and hub_verify_token == VERIFY_TOKEN:
+            response.media_type = "text/plain"
+            return PlainTextResponse(content=hub_challenge, status_code=status.HTTP_200_OK)
         else:
             raise HTTPException(status_code=403, detail="Verification failed")
     else:
