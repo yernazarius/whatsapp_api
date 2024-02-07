@@ -10,17 +10,13 @@ app = FastAPI()
 WHATSAPP_TOKEN = os.getenv('WHATSAPP_TOKEN')
 VERIFY_TOKEN = os.getenv('VERIFY_TOKEN')
 
-
 class WhatsAppMessage(BaseModel):
     object: str
     entry: list
 
-
 @app.post("/webhook")
 async def receive_message(request: Request):
     body = await request.json()
-
-    # Check the Incoming webhook message
     print(body)
 
     if body.get('object'):
@@ -43,22 +39,16 @@ async def receive_message(request: Request):
                         },
                         headers={"Content-Type": "application/json"},
                     )
-
         return {"message": "Received"}, 200
     else:
         raise HTTPException(status_code=404, detail="Event is not from a WhatsApp API")
 
-
 @app.get("/webhook")
-async def verify_webhook(mode: str, token: str, challenge: str):
-    if mode and token:
-        if mode == 'subscribe' and token == VERIFY_TOKEN:
-            return challenge
-        else:
-            raise HTTPException(status_code=403, detail="Verification failed")
+async def verify_webhook(mode: str, token: str = None, challenge: str = None):
+    if mode == 'subscribe' and token == VERIFY_TOKEN:
+        return {"challenge": challenge} 
     else:
-        raise HTTPException(status_code=400, detail="Missing mode or token")
-
+        raise HTTPException(status_code=403, detail="Verification failed")
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=int(os.getenv('PORT', 8000)))
