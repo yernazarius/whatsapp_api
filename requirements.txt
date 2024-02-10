@@ -4,3 +4,5 @@ Flask==2.2.2
 requests-toolbelt==0.9.1
 Werkzeug==2.2.2
 colorama==0.4.6
+waitress==3.0.0
+gunicorn==21.2.0
