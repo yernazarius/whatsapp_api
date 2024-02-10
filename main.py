@@ -1,59 +1,101 @@
-from fastapi import FastAPI, Request, HTTPException, status, Response
-from pydantic import BaseModel
-import uvicorn
 import os
-import httpx
+import logging
+from yernazarius import WhatsApp
+from dotenv import load_dotenv
+from flask import Flask, request, make_response
 
-app = FastAPI()
+app = Flask(__name__)
 
-# Load environment variables
-WHATSAPP_TOKEN = os.getenv('WHATSAPP_TOKEN')
-VERIFY_TOKEN = os.getenv('VERIFY_TOKEN')
+load_dotenv()
+messenger = WhatsApp(os.getenv("TOKEN"), phone_number_id=os.getenv("PHONE_NUMBER_ID"))
+VERIFY_TOKEN = "yernar"
+
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+)
 
 
-class WhatsAppMessage(BaseModel):
-    object: str
-    entry: list
+@app.get("/")
+def verify_token():
+    if request.args.get("hub.verify_token") == VERIFY_TOKEN:
+        logging.info("Verified webhook")
+        response = make_response(request.args.get("hub.challenge"), 200)
+        response.mimetype = "text/plain"
+        return response
+    logging.error("Webhook Verification failed")
+    return "Invalid verification token"
 
+@app.post("/")
+def hook():
+    data = request.get_json()
+    logging.info("Received webhook data: %s", data)
+    changed_field = messenger.changed_field(data)
+    if changed_field == "messages":
+        new_message = messenger.is_message(data)
+        if new_message:
+            mobile = messenger.get_mobile(data)
+            name = messenger.get_name(data)
+            message_type = messenger.get_message_type(data)
+            logging.info(
+                f"New Message; sender:{mobile} name:{name} type:{message_type}"
+            )
+            if message_type == "text":
+                message = messenger.get_message(data)
+                name = messenger.get_name(data)
+                logging.info("Message: %s", message)
+                messenger.send_message(f"Hi {name}, nice to connect with you", mobile)
 
-@app.post("/webhook")
-async def receive_message(request: Request):
-    body = await request.json()
+            elif message_type == "interactive":
+                message_response = messenger.get_interactive_response(data)
+                interactive_type = message_response.get("type")
+                message_id = message_response[interactive_type]["id"]
+                message_text = message_response[interactive_type]["title"]
+                logging.info(f"Interactive Message; {message_id}: {message_text}")
 
-    # Check the Incoming webhook message
-    print(body)
+            elif message_type == "location":
+                message_location = messenger.get_location(data)
+                message_latitude = message_location["latitude"]
+                message_longitude = message_location["longitude"]
+                logging.info("Location: %s, %s", message_latitude, message_longitude)
 
-    if body.get('object'):
-        entry = body.get('entry', [])
-        if entry and 'changes' in entry[0]:
-            changes = entry[0]['changes']
-            if changes and 'value' in changes[0] and 'messages' in changes[0]['value']:
-                phone_number_id = changes[0]['value']['metadata']['phone_number_id']
-                from_number = changes[0]['value']['messages'][0]['from']
-                msg_body = changes[0]['value']['messages'][0]['text']['body']
+            elif message_type == "image":
+                image = messenger.get_image(data)
+                image_id, mime_type = image["id"], image["mime_type"]
+                image_url = messenger.query_media_url(image_id)
+                image_filename = messenger.download_media(image_url, mime_type)
+                logging.info(f"{mobile} sent image {image_filename}")
 
-                # Send response message
-                async with httpx.AsyncClient() as client:
-                    await client.post(
-                        f"https://graph.facebook.com/v12.0/{phone_number_id}/messages?access_token={WHATSAPP_TOKEN}",
-                        json={
-                            "messaging_product": "whatsapp",
-                            "to": from_number,
-                            "text": {"body": "Ack: " + msg_body},
-                        },
-                        headers={"Content-Type": "application/json"},
-                    )
+            elif message_type == "video":
+                video = messenger.get_video(data)
+                video_id, mime_type = video["id"], video["mime_type"]
+                video_url = messenger.query_media_url(video_id)
+                video_filename = messenger.download_media(video_url, mime_type)
+                logging.info(f"{mobile} sent video {video_filename}")
 
-        return {"message": "Received"}, 200
-    else:
-        raise HTTPException(status_code=404, detail="Event is not from a WhatsApp API")
+            elif message_type == "audio":
+                audio = messenger.get_audio(data)
+                audio_id, mime_type = audio["id"], audio["mime_type"]
+                audio_url = messenger.query_media_url(audio_id)
+                audio_filename = messenger.download_media(audio_url, mime_type)
+                logging.info(f"{mobile} sent audio {audio_filename}")
 
-@app.get("/webhook")
-async def verify_webhook(hub_mode: str, hub_verify_token: str, hub_challenge: str):
-    if hub_mode == 'subscribe' and hub_verify_token == VERIFY_TOKEN:
-        return Response(content=hub_challenge, media_type="text/plain")
-    else:
-        return Response(status_code=403, content="Verification failed")
+            elif message_type == "document":
+                file = messenger.get_document(data)
+                file_id, mime_type = file["id"], file["mime_type"]
+                file_url = messenger.query_media_url(file_id)
+                file_filename = messenger.download_media(file_url, mime_type)
+                logging.info(f"{mobile} sent file {file_filename}")
+            else:
+                logging.info(f"{mobile} sent {message_type} ")
+                logging.info(data)
+        else:
+            delivery = messenger.get_delivery(data)
+            if delivery:
+                logging.info(f"Message : {delivery}")
+            else:
+                logging.info("No new message")
+    return "OK", 200
+
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=int(os.getenv('PORT', 8000)))
+    app.run(port=4444, debug=False)
