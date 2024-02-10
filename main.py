@@ -3,6 +3,7 @@ import logging
 from yernazarius import WhatsApp
 from dotenv import load_dotenv
 from flask import Flask, request, make_response
+from funcs import sending_message, sending_audio, sending_button
 
 app = Flask(__name__)
 
@@ -41,9 +42,9 @@ def hook():
             )
             if message_type == "text":
                 message = messenger.get_message(data)
-                name = messenger.get_name(data)
+                # name = messenger.get_name(data)
                 logging.info("Message: %s", message)
-                messenger.send_message(f"Hi {name}, nice to connect with you", mobile)
+                messenger.send_message(f"сам лох", mobile)
 
             elif message_type == "interactive":
                 message_response = messenger.get_interactive_response(data)
